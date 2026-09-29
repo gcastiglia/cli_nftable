@@ -19,13 +19,25 @@ En python, on peut interagir avec nftable via la paquet python-nftable, qui perm
 ## Choix 
 
 Pour le NAT pour accéder à Internet, j'ai fait le choix arbitraire de l'interface enp0s1 car le lab tournait sur https://cockpit-project.org/ via le plugin cockpit-VM qui permet de gérer des VMs via KVM
+la règle est défiinie ainsi via l'option masquerade
+
+
+```
+{ "add": { "chain": { "family": "inet", "table": "firewall", "name": "nat", "type":"nat","hook":"postrouting","prio":0,"policy":"accept"} } },
+{ "add": { "rule": { "family": "inet", "table": "firewall", "chain": "nat",
+                         "expr": [ { "match": { "op": "==", "left": { "meta": { "key": "oifname"} }, "right": "enp0s1" } },
+                                   { "masquerade": null } ] } } },
+```
+
+
 Pour la blacklist, j'ai créer un ensemble `@blacklist` avec une règle qui vérifie l'appartenance des IPs et drop le trafique en PREROUTING 
 
 
 
-### Chaine nftable
+## Chaine nftable
 
-Voici les définitions JSON qui permettent d'interragir avec libnftable-json
+### Routage est accès au routeur
+Voici les définitions JSON qui permettent d’interagir avec libnftable-json pour rajouter des règles INPUT, FORWARD et d'accès au NAT 
 
 ```python3
     ruleset_input_tcp_udp = { 
@@ -112,4 +124,45 @@ Voici les définitions JSON qui permettent d'interragir avec libnftable-json
     }
 ```
 
+### Liste des régles, applications et flush
+
+La suppression de règles se fait via cette instruction
+
+```
+    cmd = {
+        "nftables": [
+            {"flush": {"ruleset": None}}
+         ]   
+    }
+```
+
+La liste se fait via
+
+```
+    cmd = {
+        "nftables": [
+            {"list": {"ruleset": None}}
+        ]
+    }
+```
+
+et l’application se fait via cette instruction, on traduit le dictionnaire en JSON et on utilise la methode `json_cmd` du paquet Nftables
+
+
+```
+    json_cmd = json.loads(json.dumps(cmd))
+    rc, output, error = nft.json_cmd(json_cmd)
+    if rc == 0:
+        #print("\n📋 Règles actuelles:")
+        json_dmp = json.loads(json.dumps(output))
+        return json_dmp
+    else:
+        print(f"❌ Erreur: {error}")
+        sys.exit(1)  
+
+```
+
+## Utilisation
+
+Le programme permet d'ajouter des règles en INPUT, de routage, des IPs à la blacklist et d'accès à Internet via un NAT
 
