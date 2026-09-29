@@ -14,5 +14,102 @@ net.ipv4.ip_forward=1
 
 ## Libnftable-json
 
-En python, on peut interragir avec nftable via la paquet nftable
+En python, on peut interagir avec nftable via la paquet python-nftable, qui permet d'interragir avec netfilter, et d'ainsi définir des régles sur la chaine INPUT (ie les paquets destinés au routeur), FORWARD (les paquets transitant par le routeur) etc...
+
+## Choix 
+
+Pour le NAT pour accéder à Internet, j'ai fait le choix arbitraire de l'interface enp0s1 car le lab tournait sur https://cockpit-project.org/ via le plugin cockpit-VM qui permet de gérer des VMs via KVM
+Pour la blacklist, j'ai créer un ensemble `@blacklist` avec une règle qui vérifie l'appartenance des IPs et drop le trafique en PREROUTING 
+
+
+
+### Chaine nftable
+
+Voici les définitions JSON qui permettent d'interragir avec libnftable-json
+
+```python3
+    ruleset_input_tcp_udp = { 
+                "add": {
+                    "rule": {
+                        "family": "inet",
+                        "table": "firewall",
+                        "chain": "input",
+                        "expr": [
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "tcp_or_udp", "field": "dport"}}, "right": "port"}},
+                            {"accept": None}
+                        ]
+                    }
+            }       
+    }
+
+    ruleset_input_spec_ip_tcp_udp = {
+                "add": {
+                    "rule": {
+                        "family": "inet",
+                        "table": "firewall",
+                        "chain": "input",
+                        "expr": [
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": "saddr"}}, "right": "ip_or_set"}},
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "tcp_or_udp", "field": "dport"}}, "right": "port"}},
+                            {"accept": None}
+                        ]
+                    }
+            }    
+    } 
+    
+    ruleset_forward_tcp_udp = {
+
+                "add": {
+                    "rule": {
+                        "family": "inet",
+                        "table": "firewall",
+                        "chain": "forward",
+                        "expr": [
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": "saddr"}}, "right": "ip_subnet_set"}},
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": "daddr"}}, "right": "ip_subnet_set"}},
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "tcp_udp", "field": "dport"}}, "right": "port_or set" }},
+                            {"accept": None}
+                        ]
+                    }
+            }    
+    }
+
+
+
+
+    ruleset_forward_ping = {
+
+                "add": {
+                    "rule": {
+                        "family": "inet",
+                        "table": "firewall",
+                        "chain": "forward",
+                        "expr": [
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": "saddr"}}, "right": "ip_subnet_set"}},
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": "daddr"}}, "right": "ip_subnet_set"}},
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "icmp", "field": "type"}}, "right": {"set" : ["echo-reply","echo-request"] }}},
+                            {"accept": None}
+                        ]
+                    }
+            }    
+
+    }
+    
+    ruleset_forward_wan = {
+                "add": {
+                    "rule": {
+                        "family": "inet",
+                        "table": "firewall",
+                        "chain": "forward",
+                        "expr": [
+                            {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": "saddr"}}, "right": "ip_subnet_set"}},
+                            {"match": {"op": "==", "left": {"meta": {"key": "oifname"}}, "right": "enp1s0" }},
+                            {"accept": None}
+                        ]
+                    }
+            }    
+
+    }
+```
+
 
